@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "causalcascade"
+version = "0.1.0"
+description = "Data loading and evaluation tools for the CausalCascade benchmark"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+readme = "README.md"
+dependencies = []
+
+[project.optional-dependencies]
+data = ["datasets>=4.0,<5", "huggingface_hub>=0.30,<2", "numpy>=1.24,<3", "Pillow>=10,<12", "torch>=2.2"]
+metrics = ["numpy>=1.24,<3", "opencv-python-headless>=4.8,<5.1"]
+video = ["numpy>=1.24,<3", "opencv-python-headless>=4.8,<5.1", "torch>=2.2"]
+vqa = ["numpy>=1.24,<3", "opencv-python-headless>=4.8,<5.1", "Pillow>=10,<12", "requests>=2.31,<3"]
+scene = ["torch>=2.2", "torchvision", "transformers", "scikit-learn"]
+
+[project.urls]
+Dataset = "https://huggingface.co/datasets/deepdeltalab/CausalCascade"
+Repository = "https://github.com/SJTU-DeepDeltaLab/CausalCascade"
+
+[tool.setuptools.packages.find]
+include = ["causalcascade*"]
+

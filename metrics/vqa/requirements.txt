@@ -1,0 +1,6 @@
+# Core agentic and deterministic-CV dependencies.
+# Install torch, torchvision, and transformers separately for the target hardware.
+numpy>=1.24,<3
+opencv-python-headless>=4.8,<5.1
+Pillow>=10,<12
+requests>=2.31,<3
