@@ -1,136 +1,168 @@
 # CausalCascade
 
-Evaluation code for **CausalCascade**, a benchmark of *causal cascade generation* in image-to-video models. Given generated videos and simulator references, this repository computes motion agreement, diagnostic VQA, and paired counterfactual Effect/Preserve scores.
-
-![Paper](https://img.shields.io/badge/Paper-arXiv_pending-red)
+[![Paper](https://img.shields.io/badge/Paper-arXiv_2610.15562-red)](https://arxiv.org/abs/2610.15562)
 [![Dataset](https://img.shields.io/badge/Dataset-HuggingFace-yellow)](https://huggingface.co/datasets/deepdeltalab/CausalCascade)
 [![Code](https://img.shields.io/badge/Code-GitHub-black)](https://github.com/SJTU-DeepDeltaLab/CausalCascade)
 
-## Repository Layout
+**CausalCascade** is a simulator-grounded benchmark for *causal cascade generation* in image-to-video models: generating a complete physical process from an initiating event through dependent interactions to a terminal outcome.
+
+## Dataset Overview
+
+### Scene Diversity
+
+![Overview](./assets/Fig1_Overview.png)
+
+### Three Levels of Future-Event Specification
+
+The same initial frame and reference rollout are paired with three textual conditions: **state-only** (describes the current scene state and relevant physical conditions), **trigger-aware** (additionally specifies the initiating event), and **full event-chain** (verbalizes the major event chain). 
+
+<details>
+<summary>View example: Y-shaped domino cascade</summary>
+
+![Case preview](./assets/Fig2_Example.gif)
+
+<details>
+<summary>Show the three prompt levels</summary>
+
+**Level 1: State-only**
 
 ```text
-CausalCascade/
-├── causalcascade/       Data preparation and lazy HF dataset loader
-├── metrics/
-│   ├── motion/          Factual motion and temporal alignment
-│   ├── counterfactual/  Paired Effect/Preserve metrics
-│   └── vqa/             Video-QA evidence, voting, and scoring
-├── examples/
-│   └── inference/       Generation adapters for nine I2V models
-├── pyproject.toml       Package and dependency configuration
-├── README.md
-├── VQA.md               Automated VQA setup and commands
-└── LICENSE
+Generate a physically realistic continuation video by predicting the subsequent physical evolution from the given fixed-camera first frame.
+
+Important instructions:
+- Preserve the fixed camera view.
+- The first frame is authoritative for all visible geometry, object sizes, initial poses, contact relations, spatial layout, and camera view.
+- Treat only the listed dynamic active objects and dynamic active object groups as freely moving rigid bodies.
+- Treat anchored static colliders as fixed to the world.
+
+Global rigid-body convention:
+- All rigid bodies use friction = 0.50, restitution = 0.10, linear damping = 0.04, angular damping = 0.10.
+- For every rigid body, the geometric center is also its center of mass.
+
+Dynamic active objects:
+- upper branch target sphere: the large target sphere at the upper/right end of the fork. Mass = 1.0 kg.
+- lower branch target sphere: the large target sphere at the lower/right end of the fork. Mass = 1.0 kg.
+
+Dynamic active object groups:
+- central stem domino row: the five upright dominoes forming the straight stem before the fork splits. This group contains 5 dominoes. Each object has mass = 1.0 kg.
+- upper fork domino branch: the upper row of upright dominoes after the split. This group contains 9 dominoes. Each object has mass = 1.0 kg.
+- lower fork domino branch: the lower row of upright dominoes after the split. This group contains 9 dominoes. Each object has mass = 1.0 kg.
+
+Anchored static objects:
+- wooden tabletop surface: the broad surface beneath the forked domino structure.
+
+Decorative context:
+- The remaining objects are anchored static decorators and should remain visually unchanged.
 ```
 
-## Installation And Data
+**Level 2: Trigger-aware**
 
-Use Python 3.10+. The scene-consistency pipeline requires Linux/Bash; generation dependencies are model-specific.
+```text
+Generate a physically realistic continuation video by predicting the subsequent physical evolution from the given fixed-camera first frame.
+
+Trigger event: The first tilted blue domino at the left start of the fork falls into the next domino.
+
+Important instructions:
+- Preserve the fixed camera view.
+- The first frame is authoritative for all visible geometry, object sizes, initial poses, contact relations, spatial layout, and camera view.
+- Treat only the listed dynamic active objects and dynamic active object groups as freely moving rigid bodies.
+- Treat anchored static colliders as fixed to the world.
+
+Global rigid-body convention:
+- All rigid bodies use friction = 0.50, restitution = 0.10, linear damping = 0.04, angular damping = 0.10.
+- For every rigid body, the geometric center is also its center of mass.
+
+Dynamic active objects:
+- upper branch target sphere: the large target sphere at the upper/right end of the fork. Mass = 1.0 kg.
+- lower branch target sphere: the large target sphere at the lower/right end of the fork. Mass = 1.0 kg.
+
+Dynamic active object groups:
+- central stem domino row: the five upright dominoes forming the straight stem before the fork splits. This group contains 5 dominoes. Each object has mass = 1.0 kg.
+- upper fork domino branch: the upper row of upright dominoes after the split. This group contains 9 dominoes. Each object has mass = 1.0 kg.
+- lower fork domino branch: the lower row of upright dominoes after the split. This group contains 9 dominoes. Each object has mass = 1.0 kg.
+
+Anchored static objects:
+- wooden tabletop surface: the broad surface beneath the forked domino structure.
+
+Decorative context:
+- The remaining objects are anchored static decorators and should remain visually unchanged.
+```
+
+**Level 3: Full event-chain**
+
+```text
+A curved, slightly branching line of brightly colored domino blocks stands upright across the middle of a wooden tabletop, with a small purple cone at the far left, a small red-and-teal rounded piece behind the dominoes, several little green and brown peg-like toys in front, a large pink ball near the back-right end, and a large light-blue ball near the front-right end. The motion starts at the left end when the first domino tips and hits the next, launching a chain reaction that travels steadily from left to right through the whole arrangement. Each block knocks its neighbor over, and the collapse passes through the center and then fans through the angled right-side branches, so the dominoes slap down in sequence and spread into overlapping lines on the table. As the final rightmost blocks fall, they nudge the two large balls, making the pink ball roll slightly farther back and right and the blue ball roll rightward away from the domino pile. By the end, all of the dominoes lie flat in a scattered fan-shaped heap across the center, the two balls have shifted to the right, and the smaller cone and peg-like pieces remain standing around the wreckage. Keep the camera fixed.
+```
+
+</details>
+
+</details>
+
+### Factual–Counterfactual Pairs
+
+Each edit applies a single-object **delete**, **move**, **scale**, or **mass** intervention and provides separately simulated factual and counterfactual references with matched Level 1 prompts.
+
+<details>
+<summary>View delete intervention case</summary>
+
+![Fig3_Delete](./assets/Fig3_Delete.gif)
+
+**Description:** Remove the third peg from the left in the top row of the Galton board.
+
+</details>
+
+<details>
+<summary>View move intervention case</summary>
+
+![Fig4_Move](./assets/Fig4_Move.gif)
+
+**Description:** Move the first pink domino on the upper branch of the Y-shaped chain toward the upper left.
+
+</details>
+
+<details>
+<summary>View scale intervention case</summary>
+
+![Fig5_Scale](./assets/Fig5_Scale.gif)
+
+**Description:** Reduce the height of the rightmost yellow domino on the middle step.
+
+</details>
+
+<details>
+<summary>View mass intervention case</summary>
+
+![Fig6_Mass](./assets/Fig6_Mass.gif)
+
+**Description:** Increase the mass of the barrel.
+
+</details>
+
+## Results
+
+### Causal Cascade Fidelity
+
+![RQ1Result](./assets/Fig6_Result1.png)
+
+**Left**: Performance of current I2V models under the Level 1 prompt.
+**Right**: Model-average performance as future-event specification becomes more explicit.
+
+### Selective Causal Responsiveness
+
+![RQ2Result](./assets/Fig7_Result2.png)
+
+**Counterfactual motion response across intervention types. Each marker denotes one I2V model.** Higher values on both axes indicate stronger selective causal responsiveness.
+
+## Quick Start
+
+Use Python 3.10+.
 
 ```bash
 pip install -e ".[data,metrics,video]"
 python -m causalcascade.prepare_dataset --output-dir data
 ```
 
-The dataset contains 50 base scenes, 2,832 counterfactual variants, 225 matched factual-counterfactual pairs, and 872 diagnostic questions. Preparation downloads the base references and the 225 pairs, with state-only (L1), trigger-aware (L2), and full event-chain (L3) generation inputs.
-
-## Evaluate Generated Videos
-
-Run commands from the repository root. Generate videos with your own I2V pipeline or the adapters in `examples/inference/`.
-
-### Factual Motion
-
-Name videos `<series>.<scene>.mp4`.
-
-```bash
-python metrics/motion/evaluate_video_physics_metrics.py \
-  --dataset-root data/reference --generated-dir outputs/L1/MODEL \
-  --output-dir outputs/motion/L1/MODEL
-
-# After evaluating L1, L2, and L3 for each model:
-python metrics/motion/aggregate_motion.py outputs/motion > outputs/motion_summary.csv
-```
-
-This computes Spatial IoU, Weighted Spatial IoU, and Strict ST-IoU, with affine/DTW timing diagnostics. Repeat for L2 and L3. Scores are averaged across scenes.
-
-### Counterfactual *Effect* And *Preserve*
-
-Place factual videos under `outputs/L1/<model>/` and counterfactual videos under `outputs/RQ2/<model>/`. Name edited videos `<edit_type>.<series>.<scene>.<edit>.mp4`; configure model directories in `metrics/counterfactual/model_registry.json`.
-
-```bash
-python metrics/counterfactual/compute_cf_motion_metrics.py \
-  --gt-root data/reference --gt-cf-root data/counterfactual \
-  --factual-root outputs/L1 --counterfactual-root outputs/RQ2 \
-  --output-dir outputs/counterfactual --dry-run
-```
-
-Check coverage, then repeat without `--dry-run`. The four metrics are Spatial/Weighted Effect IoU and Spatial/Weighted Preserve IoU. Primary scores average edits within each scene, then average scenes separately for *delete*, *move*, *scale*, and *mass*.
-
-### Diagnostic VQA
-
-Follow [VQA.md](VQA.md) to prepare manifests, collect independent answers and scene-consistency evidence, and score the five diagnostic dimensions. API evaluation requires credentials and sends video images to the configured provider.
-
-## Outputs
-
-| Evaluation | Output |
-|---|---|
-| Factual motion | Per-video reports; aggregated `motion_summary.csv` |
-| Counterfactual | `all_case_results.csv`, `leaderboard_scene_macro.csv`, `pairing_manifest.json` |
-| Diagnostic VQA | Answer records, visual evidence, and `hybrid_score.json` |
-
-Motion scores average over scenes. VQA first averages questions within each scene and dimension, then scenes, and finally the five dimensions for Overall. Counterfactual scores average edits within each scene, then scenes, separately by edit type; incomplete models are reported separately. Validate completed CF results with:
-
-```bash
-python metrics/counterfactual/validate_cf_motion_metrics.py --results-dir outputs/counterfactual
-```
-
-## Metrics
-
-| Metric | Measures |
-|---|---|
-| Spatial IoU | Regions exhibiting motion anywhere in the rollout. |
-| Weighted Spatial IoU | Motion activity weighted by each pixel's active-frame fraction. |
-| Strict ST-IoU | Motion agreement on the reference physical-time grid. |
-| CF Spatial/Weighted Effect IoU | Correctly suppressed and induced motion, preserving change direction. |
-| CF Spatial/Weighted Preserve IoU | Motion shared by the factual and counterfactual references. |
-| Diagnostic VQA | Event occurrence, causal pathway, temporal ordering, outcome/termination, and scene consistency. |
-
-For factual map `f` and edited map `cf`, define `P = min(f, cf)`, `S = max(f - cf, 0)`, and `A = max(cf - f, 0)`. Effect combines the intersections/unions of the two directional channels `S` and `A`; Preserve compares `P`. Weighted scores use pixelwise min/max. Empty unions score 1. Weighted motion measures temporal occupancy, not speed or event order.
-
-Motion extraction defaults: 256 x 256 grid, threshold 0.06, background rate 0.03, Gaussian kernel 5, morphology kernel 3. Temporal scoring holds the final generated frame if a video ends early; affine/DTW scores are timing diagnostics, not replacements for Strict ST-IoU.
-
-## Video Generation
-
-Adapters in `examples/inference/` read `first_frame.png` and `prompt.txt` and write MP4s plus runtime metadata. Install the selected model's upstream environment and weights separately; evaluation does not require these adapters. Each script accepts `--help`.
-
-```bash
-torchrun --nproc_per_node=4 examples/inference/run_wan2_2_i2v_a14b_official_batch.py \
-  --dataset_dir data/inputs/L1 --output_dir outputs/L1/Wan2.2-I2V-A14B \
-  --model_dir /path/to/Wan2.2-I2V-A14B --code_dir /path/to/Wan2.2 \
-  --size '832*480' --frame_num 121 --seed 42 --seed_strategy case_hash \
-  --dit_fsdp --t5_fsdp --ulysses_size 4
-```
-
-Use `data/inputs/L2` or `L3` for richer future-event specification, or `data/counterfactual` with `outputs/RQ2/<model>` for the paired experiments. Counterfactuals use supplied matched L1 prompts: only intervention-affected attributes change, without reference future events. Delete/move/scale alter the initial image; mass leaves it unchanged. `case_hash` shares a scene-based seed between factual and edited runs.
-
-<details>
-<summary>Adapters and reported rollout settings (not necessarily defaults)</summary>
-
-| Model | Script in `examples/inference/` | Resolution / frames / fps |
-|---|---|---|
-| CogVideoX-Fun-V1.5 (5B InP) | `run_cogvideox_fun_inp_intervention.py` | 1360 x 768 / 85 / 8 |
-| Cosmos3-Nano | `run_cosmos3_nano_i2v_diffusers_batch.py` | 832 x 480 / 189 / 24 |
-| HunyuanVideo-I2V | `run_hunyuanvideo_i2v_official_batch.py` | 540p / 129 / 24 |
-| LTX-Video-13B | `run_ltx_video_13b_intervention.py` | 832 x 480 / 121 / 16 |
-| MAGI-1-4.5B | `run_magi1_4p5b_intervention.py` | 832 x 480 / 120 / 24 |
-| SkyReels-V2-I2V | `run_skyreels_v2_i2v_14b_720p_intervention.py` | 720p / 121 / 24 |
-| Wan2.1-I2V-14B | `run_wan2_1_i2v_14b_480p_direct_batch.py` | 832 x 480 / 121 / 16 |
-| Wan2.2-TI2V-5B | `run_wan2_2_ti2v_5b_intervention.py` | 832 x 480 / 121 / 24 |
-| Wan2.2-I2V-A14B | `run_wan2_2_i2v_a14b_official_batch.py` | 832 x 480 / 121 / 16 |
-
-Set rollout parameters explicitly where exposed; Wan output fps follows its upstream configuration. Exact historical upstream commits and full environment lockfiles were not archived, so bitwise reproduction is not guaranteed.
-
-</details>
+See [USAGE.md](USAGE.md) for input layouts, motion and counterfactual evaluation, outputs, and generation adapters. See [VQA.md](VQA.md) for automated diagnostic VQA.
 
 ## License
 
@@ -138,4 +170,17 @@ Code: [MIT](LICENSE). Dataset: [CC BY 4.0](https://huggingface.co/datasets/deepd
 
 ## Citation
 
-Paper link and BibTeX entry will be added here.
+If you use CausalCascade in your research, please cite:
+
+```bibtex
+@misc{causalcascade,
+      title={A Plausible Future Is Not a Causal Future: Can Video Models Generate How the World Unfolds?},
+      author={Jialiang Li and Zhengning Xu and Zongyang Ma and Shaobo Cui},
+      year={2026},
+      eprint={2610.15562},
+      archivePrefix={arXiv},
+      primaryClass={cs.CV},
+      url={https://arxiv.org/abs/2610.15562},
+}
+```
+
